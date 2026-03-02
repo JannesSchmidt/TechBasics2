@@ -5,5 +5,5 @@ It’s main task is to detect objects within a specific range, triggering a phys
 To elevate the project from a simple breadboard circuit to an interactive object, I decided to house the primary sensor system inside a partially hollowed-out book.
 I did this to give it the feel of a hidden surveillance gadget.
 
-### My Demo Vide0 (Advertisement)
+### My Demo Video (Advertisement)
 https://youtu.be/JoLCP_wMXNQ
