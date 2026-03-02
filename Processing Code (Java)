@@ -1,0 +1,234 @@
+import processing.serial.*;
+
+Serial myPort; 
+String data = "";
+
+// incoming data
+int iAngle = 0;
+int iDistance = 0;
+int iMode = 0;
+
+// Set this to TRUE if you left the Arduino at home and want to pretend you're working. (I needed to check if everything could actually work)
+boolean simulationMode = false;
+
+// Fake data generators for when simulationMode is on
+int simAngle = 40; 
+int simDir = 1;
+
+// A class to remember where things were. 
+class RadarObject {
+  int angle;
+  int distance;
+  float life;
+  
+  RadarObject(int angle, int distance) {
+    this.angle = angle;
+    this.distance = distance;
+    this.life = 1.0; 
+  }
+}
+
+// fading red dots
+ArrayList<RadarObject> history = new ArrayList<RadarObject>();
+
+void setup() {
+  // window to look at
+  size(1200, 700);
+  smooth(); // Anti-aliasing makes everything prettier. I just don't know how.
+  
+  if (!simulationMode) {
+    // Try to find the Arduino plugged into the USB port
+    printArray(Serial.list());
+    try {
+      String portName = Serial.list()[0]; 
+      myPort = new Serial(this, portName, 9600); 
+      myPort.bufferUntil('\n'); // Wait for the newline character before reading
+    } catch (Exception e) {
+      // Well, that didn't work. Fall back to imaginary data.
+      println("Error: Could not connect to Serial Port. Switching to Simulation.");
+      simulationMode = true;
+    }
+  }
+  
+  background(0); // black
+}
+
+void draw() {
+  // Wipe the screen clean every single frame
+  background(0);
+  
+  // Feed the machine fake data if we have no hardware
+  if (simulationMode) {
+    simulateRadar();
+  }
+  
+  // If a physical object is actually close enough to care about, log its location
+  if (iDistance > 5 && iDistance < 60) {
+    history.add(new RadarObject(iAngle, iDistance));
+  }
+
+  // Draws the cool green spy stuff
+  drawRadar(); 
+  
+  // Draws the spooky red dots
+  drawObjects();
+  
+  // Puts words on the screen
+  drawText();   
+}
+
+void serialEvent (Serial myPort) { 
+  try {
+    data = myPort.readStringUntil('\n'); 
+    
+    if (data != null) {
+      data = trim(data);
+      data = data.replace(".", "");
+
+      String[] list = split(data, ',');
+      
+      if (list.length >= 2) {
+        iAngle = int(list[0]);
+        iDistance = int(list[1]);
+        
+        // Sometimes the Arduino sends a mode, sometimes it doesn't. 
+        if (list.length > 2) {
+          iMode = int(list[2]);
+        }
+      }
+    }
+  } catch (Exception e) {
+    // Shhh, ignore the errors. Nobody needs to know.
+    println("Error parsing serial data: " + e.getMessage());
+  }
+}
+
+void drawRadar() {
+  pushMatrix(); // Saves the current grid
+  translate(width/2, height - height * 0.074); // Moves the center point to the bottom middle
+  
+  noFill();
+  strokeWeight(2);
+  stroke(98, 245, 31); // Hacker Green
+  
+  // Draws the static half-circles for visual flair
+  arc(0, 0, (width-width*0.0625), (width-width*0.0625), PI, TWO_PI);
+  arc(0, 0, (width-width*0.27), (width-width*0.27), PI, TWO_PI);
+  arc(0, 0, (width-width*0.479), (width-width*0.479), PI, TWO_PI);
+  arc(0, 0, (width-width*0.687), (width-width*0.687), PI, TWO_PI);
+  
+  // Draws the crosshair lines
+  line(-width/2, 0, width/2, 0);
+  line(0, 0, (-width/2)*cos(radians(30)), (-width/2)*sin(radians(30)));
+  line(0, 0, (-width/2)*cos(radians(60)), (-width/2)*sin(radians(60)));
+  line(0, 0, (-width/2)*cos(radians(90)), (-width/2)*sin(radians(90)));
+  line(0, 0, (-width/2)*cos(radians(120)), (-width/2)*sin(radians(120)));
+  line(0, 0, (-width/2)*cos(radians(150)), (-width/2)*sin(radians(150)));
+  
+  // Draws the sweeping motion blur of the scanner beam
+  strokeWeight(9);
+  noStroke();
+  
+  for (int j=0; j<20; j++) {
+     float fade = map(j, 0, 20, 150, 0); // Gradually makes it transparent
+     stroke(30, 250, 60, fade);
+     // Draws multiple lines closely packed together to look like a thick fading laser
+     line(0, 0, (height-height*0.12)*cos(radians(iAngle + (j*0.2))), -(height-height*0.12)*sin(radians(iAngle + (j*0.2))));
+     line(0, 0, (height-height*0.12)*cos(radians(iAngle - (j*0.2))), -(height-height*0.12)*sin(radians(iAngle - (j*0.2))));
+  }
+
+  popMatrix(); // Restores the grid back to normal
+}
+
+void drawObjects() {
+  pushMatrix();
+  translate(width/2, height - height * 0.074);
+  
+  for (int i = history.size() - 1; i >= 0; i--) {
+    RadarObject obj = history.get(i);
+    
+    // Slowly drains its life force every frame
+    obj.life -= 0.007;
+    
+    // If it's "dead" removes it
+    if (obj.life <= 0) {
+      history.remove(i);
+      continue;
+    }
+    
+    // Figures out exactly how many pixels away from the center it should be
+    float pixDist = map(obj.distance, 5, 60, 0, width/2);
+    
+    // Trigonometry! Converting polar coordinates (angle/distance) to Cartesian (x/y)
+    float x = pixDist * cos(radians(obj.angle));
+    float y = -pixDist * sin(radians(obj.angle));
+    
+    noStroke();
+    
+    // The older it is, the more transparent it gets
+    float alpha = 200 * obj.life;
+    fill(255, 0, 0, alpha);
+    
+    // Draws expanding ripple rings around the dot so it looks dangerous
+    for (int r=0; r<3; r++) {
+       float size = 10 + (r * 15);
+       float pulse = (sin(millis()/100.0) * 5); // Makes it throb based on time
+       ellipse(x, y, size + pulse, size + pulse);
+    }
+    
+    // The actual dot itself
+    fill(255, 255, 255, alpha+55);
+    ellipse(x, y, 8, 8);
+  }
+  
+  popMatrix();
+}
+
+void drawText() {
+  fill(0); 
+  noStroke();
+  rect(0, height - height * 0.0648, width, height);
+  
+  fill(98, 245, 31);
+  textSize(25);
+  
+  // Prints the raw distance numbers in the corner
+  if(iDistance < 60 && iDistance > 5) {
+    text("Distance: " + iDistance + " cm", 50, height-20);
+  } else {
+    text("Distance: Out of Range", 50, height-20);
+  }
+  
+  // Figures out what word to show based on the mode number
+  String modeName = "Unknown";
+  if (iMode == 0) modeName = "Normal";
+  else if (iMode == 1) modeName = "Fast";
+  else if (iMode == 2) modeName = "Steady";
+  
+  // Prints the mode in the other corner, perfectly aligned
+  String modeText = "Mode: " + modeName;
+  float modeWidth = textWidth(modeText);
+  text(modeText, width - modeWidth - 50, height-20);
+}
+
+// ----------------------------------------------------
+
+void simulateRadar() {
+  // Pretends the motor is moving
+  iAngle = simAngle;
+  simAngle += simDir;
+  
+  // Bounces off the imaginary walls
+  if (simAngle >= 90 || simAngle <= 15) { 
+    simDir *= -1;
+  }
+  
+  // Creatse some fake targets in thin air so the screen isn't empty
+  if ((iAngle > 70 && iAngle < 80)) {
+    iDistance = 30;
+  } else if ((iAngle > 30 && iAngle < 40)) {
+    iDistance = 15;
+  } else {
+    iDistance = 100; // Nothing to see here
+  }
+}
