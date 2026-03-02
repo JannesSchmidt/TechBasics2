@@ -6,6 +6,7 @@ To elevate the project from a simple breadboard circuit to an interactive object
 I did this to give it the feel of a hidden surveillance gadget.
 
 ### My Demo Video (Advertisement)
+(Tipp: Watch till the end)
 https://youtu.be/JoLCP_wMXNQ
 
 ### Project Documentation
