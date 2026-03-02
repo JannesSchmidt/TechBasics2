@@ -7,3 +7,7 @@ I did this to give it the feel of a hidden surveillance gadget.
 
 ### My Demo Video (Advertisement)
 https://youtu.be/JoLCP_wMXNQ
+
+### Project Documentation
+[Project Documentation.pdf](https://github.com/user-attachments/files/25683432/Project.Documentation.pdf)
+
